@@ -161,28 +161,66 @@ def create_readable_transcript(consolidated_transcript):
     return readable_transcript
 
 def refine_transcript_with_openai(transcript, api_key):
-    prompt = "Please analyze this transcript for speaker attribution errors and refine it. Do not change the text itself, only which speaker you believe said it, based on the context of the conversation. If you are unsure about a particular line, denote that line with a triple asterisk ***\n\n" + transcript
+    max_length = 15000  # Adjust based on the token limit and average token size per character
+    chunks = split_transcript_on_speaker(transcript, max_length)
+    refined_transcript = ""
+    i = 1
 
-    
-    response = client.chat.completions.create(
-        messages = [
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        model="gpt-4-1106-preview",
-        max_tokens=2048,  # Adjust based on your needs
-        temperature=0
-    )
+    for chunk in chunks:
+        prompt = """
+            Please analyze this transcript for speaker attribution errors and refine it.
+            Do not change the text itself, only which speaker you believe said it, based on the context of the conversation.
+            If you are unsure about a particular line, denote that line with a triple asterisk ***.
+            Your output should be the same as in the input, but with the expected attribution corrections, and replacements for words that were obviously transcribed inaccurately.
+            Also, put a blank line after each speaker's section.
+            Here is the transcript:
 
-    refined_transcript = response.choices[0].message.content.strip()
+        """ + chunk
+
+        print(f"Sending portion {i} of {len(chunks)}")
+        response = client.chat.completions.create(
+            messages = [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            model="gpt-4-1106-preview",
+            max_tokens=4096,  # Adjust based on your needs
+            temperature=0
+        )
+
+        refined_transcript += response.choices[0].message.content.strip() + "\n\n\n>>>>>Transcript Splice<<<<<\n\n\n"
+        i += 1
+
     return refined_transcript
+
+def split_transcript_on_speaker(transcript, max_length):
+    chunks = []
+    current_chunk = []
+    current_length = 0
+
+    for line in transcript.split('\n'):
+        # Check if the line is a speaker change or if adding it would exceed the max length
+        if (line.startswith("Brett:") or line.startswith("Victor:")) and current_length + len(line) > max_length:
+            # Start a new chunk
+            if current_chunk:
+                chunks.append('\n'.join(current_chunk))
+                current_chunk = []
+                current_length = 0
+        current_chunk.append(line)
+        current_length += len(line)
+
+    # Add the last chunk if it's not empty
+    if current_chunk:
+        chunks.append('\n'.join(current_chunk))
+
+    return chunks
 
 # Main method to handle the transcription process
 def process_transcription(file_path):
     base_filename = os.path.splitext(os.path.basename(file_path))[0]
-
+    print(f"Loading file: {file_path}")
     # Transcribe using both services
     print("Using IBM's Watson to trascribe audio and identify speakers...")
     watson_transcript = transcribe_with_watson(file_path)
@@ -218,9 +256,15 @@ def process_transcription(file_path):
 
 
 
-# Path to the audio file
-audio_file_path = 'mp3s/Episode 01 - The Battle of Megiddo.mp3'
+# Directory containing the MP3 files
+mp3s_dir = 'mp3s'
 
-# Process the transcription
-process_transcription(audio_file_path)
+# Iterate over all MP3 files in the directory
+ for filename in os.listdir(mp3s_dir):
+    if filename.endswith(".mp3"):
+        # Construct the full path to the file
+        audio_file_path = os.path.join(mp3s_dir, filename)
+
+        # Process the transcription for each file
+        process_transcription(audio_file_path)
 
