@@ -117,33 +117,6 @@ def process_watson_transcript_to_json(watson_transcript):
     # Return the processed data as JSON
     return json.dumps(speaker_data, indent=2)
 
-# Main method to handle the transcription process
-def process_transcription(file_path):
-    base_filename = os.path.splitext(os.path.basename(file_path))[0]
-
-    # Transcribe using both services
-    watson_transcript = transcribe_with_watson(file_path)
-    processed_speaker_json = process_watson_transcript_to_json(watson_transcript)
-    save_transcript(f"{base_filename}_watson_speakers.json", processed_speaker_json)
-
-    whisper_transcript = transcribe_with_whisper_api(file_path)
-    #save_transcript(f"{base_filename}_whisper_transcript.json", whisper_transcript)
-
-    # Merge the transcripts
-    merged_transcript_json = merge_transcripts(processed_speaker_json, whisper_transcript)
-    save_transcript(f"{base_filename}_merged_transcript.json", merged_transcript_json)
-
-    # Process the transcript
-    consolidated_transcript = consolidate_transcript(json.loads(merged_transcript_json))
-    readable_transcript = create_readable_transcript(consolidated_transcript)
-    # Specify the filename for the readable transcript
-    readable_transcript_filename = f"{base_filename}_readable_transcript.txt"
-    save_transcript(readable_transcript_filename, readable_transcript)
-
-    # Display the first few lines of the readable transcript for review
-    print("\n".join(readable_transcript.split('\n')[:10]))  # Printing first few lines for brevity
-    print(f"Transcriptions saved for {base_filename}")
-
 def consolidate_transcript(merged_transcript):
     consolidated_data = []
     current_speaker = None
@@ -186,6 +159,34 @@ def create_readable_transcript(consolidated_transcript):
         readable_transcript += f"{speaker_name}: {entry['text']}\n"
 
     return readable_transcript
+
+# Main method to handle the transcription process
+def process_transcription(file_path):
+    base_filename = os.path.splitext(os.path.basename(file_path))[0]
+
+    # Transcribe using both services
+    watson_transcript = transcribe_with_watson(file_path)
+    processed_speaker_json = process_watson_transcript_to_json(watson_transcript)
+    save_transcript(f"{base_filename}_watson_speakers.json", processed_speaker_json)
+
+    whisper_transcript = transcribe_with_whisper_api(file_path)
+    #save_transcript(f"{base_filename}_whisper_transcript.json", whisper_transcript)
+
+    # Merge the transcripts
+    merged_transcript_json = merge_transcripts(processed_speaker_json, whisper_transcript)
+    save_transcript(f"{base_filename}_merged_transcript.json", merged_transcript_json)
+
+    # Process the transcript
+    consolidated_transcript = consolidate_transcript(json.loads(merged_transcript_json))
+    readable_transcript = create_readable_transcript(consolidated_transcript)
+    # Specify the filename for the readable transcript
+    readable_transcript_filename = f"{base_filename}_readable_transcript.txt"
+    save_transcript(readable_transcript_filename, readable_transcript)
+
+    # Display the first few lines of the readable transcript for review
+    print("\n".join(readable_transcript.split('\n')[:10]))  # Printing first few lines for brevity
+    print(f"Transcriptions saved for {base_filename}")
+
 
 # Path to the audio file
 audio_file_path = 'truncated.mp3'
