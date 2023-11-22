@@ -1,7 +1,9 @@
 import local_config  # Importing your local_config file for API keys and endpoints
 from ibm_watson import SpeechToTextV1
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
-import openai
+from openai import OpenAI
+
+client = OpenAI(api_key=local_config.OPENAI_API_KEY)
 import json
 import os
 from openai import OpenAI
@@ -56,8 +58,6 @@ def transcribe_with_whisper_api(file_path):
             return file.read()
 
     # Setup for OpenAI transcription
-    client = OpenAI(api_key=local_config.OPENAI_API_KEY)
-
     with open(file_path, "rb") as audio_file:
         response = client.audio.transcriptions.create(
             model="whisper-1",
@@ -160,36 +160,66 @@ def create_readable_transcript(consolidated_transcript):
 
     return readable_transcript
 
+def refine_transcript_with_openai(transcript, api_key):
+    prompt = "Please analyze this transcript for speaker attribution errors and refine it. Do not change the text itself, only which speaker you believe said it, based on the context of the conversation. If you are unsure about a particular line, denote that line with a triple asterisk ***\n\n" + transcript
+
+    
+    response = client.chat.completions.create(
+        messages = [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        model="gpt-4-1106-preview",
+        max_tokens=2048,  # Adjust based on your needs
+        temperature=0
+    )
+
+    refined_transcript = response.choices[0].message.content.strip()
+    return refined_transcript
+
 # Main method to handle the transcription process
 def process_transcription(file_path):
     base_filename = os.path.splitext(os.path.basename(file_path))[0]
 
     # Transcribe using both services
+    print("Using IBM's Watson to trascribe audio and identify speakers...")
     watson_transcript = transcribe_with_watson(file_path)
     processed_speaker_json = process_watson_transcript_to_json(watson_transcript)
     save_transcript(f"{base_filename}_watson_speakers.json", processed_speaker_json)
 
+    print("Using OpenAI's Whisper to trascribe audio more accurately...")
     whisper_transcript = transcribe_with_whisper_api(file_path)
-    #save_transcript(f"{base_filename}_whisper_transcript.json", whisper_transcript)
 
     # Merge the transcripts
+    print("Merging transcripts...")
     merged_transcript_json = merge_transcripts(processed_speaker_json, whisper_transcript)
     save_transcript(f"{base_filename}_merged_transcript.json", merged_transcript_json)
 
     # Process the transcript
+    print("Making transcripts human-readable...")
     consolidated_transcript = consolidate_transcript(json.loads(merged_transcript_json))
     readable_transcript = create_readable_transcript(consolidated_transcript)
     # Specify the filename for the readable transcript
     readable_transcript_filename = f"{base_filename}_readable_transcript.txt"
     save_transcript(readable_transcript_filename, readable_transcript)
 
+    # Send the transcript to OpenAI for speaker attribution error analysis and correction.
+    print("Sending transcript to OpenAI to identify and correct speaker attribution...")
+    refined_transcript = refine_transcript_with_openai(readable_transcript, local_config.OPENAI_API_KEY)
+    refined_transcript_filename = f"{base_filename}_refined_transcript.txt"
+    save_transcript(refined_transcript_filename, refined_transcript)
+
     # Display the first few lines of the readable transcript for review
-    print("\n".join(readable_transcript.split('\n')[:10]))  # Printing first few lines for brevity
     print(f"Transcriptions saved for {base_filename}")
+    print("Done!")
+
+
 
 
 # Path to the audio file
-audio_file_path = 'truncated.mp3'
+audio_file_path = 'mp3s/Episode 01 - The Battle of Megiddo.mp3'
 
 # Process the transcription
 process_transcription(audio_file_path)
