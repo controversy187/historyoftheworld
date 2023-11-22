@@ -260,7 +260,7 @@ def process_transcription(file_path):
 mp3s_dir = 'mp3s'
 
 # Iterate over all MP3 files in the directory
- for filename in os.listdir(mp3s_dir):
+for filename in os.listdir(mp3s_dir):
     if filename.endswith(".mp3"):
         # Construct the full path to the file
         audio_file_path = os.path.join(mp3s_dir, filename)
